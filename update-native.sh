@@ -19,6 +19,7 @@ CONFIG_DIR="/etc/s-ui-manager"
 INSTALL_CONFIG="${CONFIG_DIR}/install.conf"
 ENV_FILE="${CONFIG_DIR}/s-ui-manager.env"
 BACKUP_DIR="/var/backups/s-ui-manager"
+SERVICE_GROUP="sui-manager"
 
 if [ -r "$INSTALL_CONFIG" ]; then
   # 该文件由 root 安装脚本生成，且权限为 0600。
@@ -65,6 +66,9 @@ if [ ! -x "$APP_DIR/.venv/bin/python" ]; then
 fi
 "$APP_DIR/.venv/bin/pip" install --disable-pip-version-check \
   -r "$APP_DIR/backend/requirements.txt"
+getent group "$SERVICE_GROUP" >/dev/null 2>&1 || fail "未找到服务组：$SERVICE_GROUP，请先执行 bash suim.sh"
+chown -R root:"$SERVICE_GROUP" "$APP_DIR/.venv"
+chmod -R g+rX,o-rwx "$APP_DIR/.venv"
 
 sed \
   -e "s|@APP_DIR@|$APP_DIR|g" \

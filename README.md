@@ -240,6 +240,17 @@ bash suim.sh
 http://VPS公网IP:8080
 ```
 
+如果曾使用早期版本安装，日志出现 `status=203/EXEC` 或执行 `.venv/bin/uvicorn: Permission denied`，可执行：
+
+```bash
+chown -R root:sui-manager /opt/s-ui-manager/.venv
+chmod -R g+rX,o-rwx /opt/s-ui-manager/.venv
+systemctl reset-failed s-ui-manager
+systemctl restart s-ui-manager
+```
+
+当前版本的 `suim.sh` 和 `update-native.sh` 已自动处理虚拟环境权限，新安装无需手动执行。
+
 ### 3.2 自定义安装参数
 
 默认管理员用户名为 `admin`，默认端口为 `8080`。可以在首次安装时覆盖：

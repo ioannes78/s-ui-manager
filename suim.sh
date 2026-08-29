@@ -86,6 +86,12 @@ fi
 "$APP_DIR/.venv/bin/pip" install --disable-pip-version-check \
   -r "$APP_DIR/backend/requirements.txt"
 
+# 虚拟环境由 root 创建；授予服务组只读和执行权限。
+# umask 027 会让新目录默认为 0750，若仍属于 root:root，
+# Systemd 中的低权限用户会以 203/EXEC、Permission denied 启动失败。
+chown -R root:"$SERVICE_GROUP" "$APP_DIR/.venv"
+chmod -R g+rX,o-rwx "$APP_DIR/.venv"
+
 install -d -m 0750 "$CONFIG_DIR"
 NEW_ADMIN_PASSWORD=""
 if [ ! -f "$ENV_FILE" ]; then
