@@ -154,7 +154,7 @@ function shape(value) {
 
   <div v-else class="layout">
     <aside>
-      <div class="brand">S-UI Manager <small>V1.0</small></div>
+      <div class="brand">S-UI Manager <small>V1.1</small></div>
       <div class="menu">Dashboard<br />节点管理<br />批量操作<br />审计日志</div>
       <el-button text @click="logout">退出</el-button>
     </aside>
