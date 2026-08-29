@@ -220,8 +220,8 @@ apt install -y git
 
 git clone https://github.com/ioannes78/s-ui-manager.git /opt/s-ui-manager
 cd /opt/s-ui-manager
-chmod +x install-native.sh update-native.sh
-bash install-native.sh
+chmod +x suim.sh update-native.sh
+bash suim.sh
 ```
 
 安装脚本会自动完成：
@@ -248,13 +248,13 @@ http://VPS公网IP:8080
 SUI_ADMIN_USERNAME=myadmin \
 SUI_ADMIN_PASSWORD='你设置的强密码' \
 SUI_HTTP_PORT=18080 \
-bash install-native.sh
+bash suim.sh
 ```
 
 默认监听所有 IPv4 地址。若前面另有 HTTPS 反向代理，可只监听本机：
 
 ```bash
-SUI_BIND_ADDRESS=127.0.0.1 bash install-native.sh
+SUI_BIND_ADDRESS=127.0.0.1 bash suim.sh
 ```
 
 `SUI_BIND_ADDRESS` 仅接受 `0.0.0.0` 或 `127.0.0.1`，该设置会保存到安装参数中，并在一键更新后继续生效。
@@ -262,7 +262,7 @@ SUI_BIND_ADDRESS=127.0.0.1 bash install-native.sh
 也可以指定其他安装路径，但不要放在 `/root` 下：
 
 ```bash
-SUI_MANAGER_DIR=/srv/s-ui-manager bash install-native.sh
+SUI_MANAGER_DIR=/srv/s-ui-manager bash suim.sh
 ```
 
 ### 3.3 配置与数据位置
@@ -319,7 +319,7 @@ bash update-native.sh
 |---|---|---|
 | 隔离性 | 更强 | 使用 Python venv 隔离 |
 | 运行内存 | 略高 | 略低 |
-| 安装方式 | `docker compose up` | `bash install-native.sh` |
+| 安装方式 | `docker compose up` | `bash suim.sh` |
 | 进程管理 | Docker | Systemd |
 | 前端服务 | Nginx 容器 | 系统 Nginx |
 | 更新方式 | `git pull` 后重建容器 | `bash update-native.sh` |
@@ -348,7 +348,7 @@ docker compose up -d --build
 
 ```bash
 cd /opt/s-ui-manager
-SUI_BIND_ADDRESS=127.0.0.1 bash install-native.sh
+SUI_BIND_ADDRESS=127.0.0.1 bash suim.sh
 ```
 
 ### 4.1 Nginx 反向代理示例
