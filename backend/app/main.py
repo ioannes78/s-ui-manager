@@ -12,13 +12,13 @@ from .sui import SUIClient
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="S-UI Manager API", version="1.0.0")
+app = FastAPI(title="S-UI Manager API", version="1.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "name": settings.app_name, "version": "1.0.0"}
+    return {"ok": True, "name": settings.app_name, "version": "1.1.0"}
 
 @app.post("/api/login")
 def login(body: LoginIn):
