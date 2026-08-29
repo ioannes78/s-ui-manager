@@ -1,0 +1,30 @@
+[Unit]
+Description=S-UI Manager API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sui-manager
+Group=sui-manager
+WorkingDirectory=@APP_DIR@/backend
+EnvironmentFile=@ENV_FILE@
+ExecStart=@APP_DIR@/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=@APP_DIR@/data
+
+[Install]
+WantedBy=multi-user.target
+
