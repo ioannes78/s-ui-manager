@@ -21,6 +21,9 @@ def encrypt_token(value: str) -> str:
 def decrypt_token(value: str) -> str:
     return _fernet().decrypt(value.encode()).decode()
 
+encrypt_secret = encrypt_token
+decrypt_secret = decrypt_token
+
 def create_access_token(username: str) -> str:
     exp = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_minutes)
     return jwt.encode({"sub": username, "exp": exp}, settings.secret_key, algorithm=ALGO)
