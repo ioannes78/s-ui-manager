@@ -5,6 +5,7 @@ umask 027
 
 PROGRAM_NAME="S-UI Manager"
 SUIM_MANAGER_API=1
+SUIM_MANAGER_VERSION=2
 REPO_URL="${SUI_REPO_URL:-https://github.com/ioannes78/s-ui-manager.git}"
 SERVICE_NAME="s-ui-manager"
 SERVICE_USER="sui-manager"
@@ -277,6 +278,8 @@ create_environment_file() {
     printf 'ADMIN_PASSWORD=%s\n' "$ADMIN_PASSWORD_VALUE"
     printf 'ACCESS_TOKEN_MINUTES=720\n'
     printf 'NODE_TIMEOUT_SECONDS=8\n'
+    printf 'HEALTH_MONITOR_ENABLED=true\n'
+    printf 'HEALTH_CHECK_INTERVAL_SECONDS=60\n'
   } >"$ENV_FILE"
   chmod 0600 "$ENV_FILE"
   umask 027
