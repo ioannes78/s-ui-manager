@@ -32,7 +32,7 @@ from .security import (
 from .sui import SUIClient
 
 
-APP_VERSION = "2.0.1"
+APP_VERSION = "2.0.2"
 SNAPSHOT_OBJECTS = (
     "clients", "inbounds", "outbounds", "tls", "services",
     "endpoints", "config", "settings",
