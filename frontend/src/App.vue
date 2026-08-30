@@ -10,7 +10,7 @@ const logged = ref(Boolean(localStorage.getItem('token')))
 const username = ref('admin')
 const password = ref('')
 const loginLoading = ref(false)
-const meta = ref({ version: '2.0.0', user: 'admin' })
+const meta = ref({ version: '2.0.1', user: 'admin' })
 
 const pageTitle = computed(() => route.meta.title || 'S-UI Manager')
 
