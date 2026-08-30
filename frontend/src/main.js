@@ -1,7 +1,19 @@
 import { createApp } from 'vue'
-import ElementPlus from 'element-plus'
+import {
+  ElAlert, ElButton, ElCard, ElCheckbox, ElDatePicker, ElDialog, ElDrawer,
+  ElForm, ElFormItem, ElInput, ElInputNumber, ElLoading, ElOption, ElProgress,
+  ElRadioButton, ElRadioGroup, ElSelect, ElSwitch, ElTable, ElTableColumn, ElTag,
+} from 'element-plus'
 import 'element-plus/dist/index.css'
 import './style.css'
 import App from './App.vue'
+import { router } from './router'
 
-createApp(App).use(ElementPlus).mount('#app')
+const application = createApp(App)
+const elementComponents = [
+  ElAlert, ElButton, ElCard, ElCheckbox, ElDatePicker, ElDialog, ElDrawer,
+  ElForm, ElFormItem, ElInput, ElInputNumber, ElLoading, ElOption, ElProgress,
+  ElRadioButton, ElRadioGroup, ElSelect, ElSwitch, ElTable, ElTableColumn, ElTag,
+]
+elementComponents.forEach((component) => application.use(component))
+application.use(router).mount('#app')
