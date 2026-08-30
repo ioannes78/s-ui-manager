@@ -1,7 +1,7 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { api, errorText, formatTime } from '../api'
+import { api, errorText, formatBytes, formatTime } from '../api'
 
 const nodes = ref([])
 const loading = ref(false)
@@ -11,14 +11,151 @@ const selected = ref([])
 const editOpen = ref(false)
 const editId = ref(null)
 const detailOpen = ref(false)
-const detail = ref(null)
-const detailLoading = ref(false)
+const detailNode = ref(null)
+const detailTab = ref('overview')
+const rawSource = ref('overview')
+const detailSections = ref(sectionState())
+const detailDrawerSize = ref(drawerSize())
 const snapshotOpen = ref(false)
 const snapshots = ref([])
 const snapshotNode = ref(null)
 const rawOpen = ref(false)
 const raw = ref({ object: 'clients', action: 'edit', data: '{}' })
 const form = ref(emptyForm())
+
+const sectionConfig = {
+  overview: { endpoint: 'status', label: '运行概览' },
+  clients: { endpoint: 'clients', label: '客户端' },
+  inbounds: { endpoint: 'inbounds', label: '入站' },
+  onlines: { endpoint: 'onlines', label: '在线情况' },
+}
+
+const statusData = computed(() => unwrap(detailSections.value.overview.data))
+const clientRows = computed(() => findArray(detailSections.value.clients.data, ['clients', 'users']))
+const inboundRows = computed(() => findArray(detailSections.value.inbounds.data, ['inbounds']))
+const onlineData = computed(() => unwrap(detailSections.value.onlines.data))
+const onlineGroups = computed(() => [
+  { key: 'user', title: '在线用户', values: arrayValue(onlineData.value, ['user', 'users']) },
+  { key: 'inbound', title: '活跃入站', values: arrayValue(onlineData.value, ['inbound', 'inbounds']) },
+  { key: 'outbound', title: '活跃出站', values: arrayValue(onlineData.value, ['outbound', 'outbounds']) },
+])
+const rawJson = computed(() => maskedJson(detailSections.value[rawSource.value]?.data))
+
+function sectionState() {
+  return Object.fromEntries(['overview', 'clients', 'inbounds', 'onlines'].map((key) => [key, { data: null, loading: false, error: '', loaded: false }]))
+}
+
+function drawerSize() {
+  if (window.innerWidth <= 850) return '100%'
+  if (window.innerWidth <= 1200) return '90%'
+  return '80%'
+}
+
+function syncDrawerSize() {
+  detailDrawerSize.value = drawerSize()
+}
+
+function unwrap(value) {
+  if (!value || typeof value !== 'object') return value || {}
+  if (value.obj && typeof value.obj === 'object') return value.obj
+  if (value.data && typeof value.data === 'object') return unwrap(value.data)
+  return value
+}
+
+function findArray(value, keys) {
+  const object = unwrap(value)
+  if (Array.isArray(object)) return object
+  for (const key of keys) if (Array.isArray(object?.[key])) return object[key]
+  return []
+}
+
+function arrayValue(object, keys) {
+  for (const key of keys) if (Array.isArray(object?.[key])) return object[key]
+  return []
+}
+
+function numberValue(object, keys, fallback = 0) {
+  for (const key of keys) {
+    const value = Number(object?.[key])
+    if (Number.isFinite(value)) return value
+  }
+  return fallback
+}
+
+function nestedValue(object, names) {
+  for (const name of names) if (object?.[name] && typeof object[name] === 'object') return object[name]
+  return {}
+}
+
+function percent(current, total) {
+  const result = total > 0 ? current / total * 100 : 0
+  return Math.max(0, Math.min(100, Number(result.toFixed(1))))
+}
+
+function cpuPercent() {
+  return Math.max(0, Math.min(100, numberValue(statusData.value, ['cpu', 'cpu_percent', 'cpuPercent'])))
+}
+
+function memoryInfo() {
+  const item = nestedValue(statusData.value, ['mem', 'memory'])
+  const current = numberValue(item, ['current', 'used', 'usage'])
+  const total = numberValue(item, ['total', 'max'])
+  return { current, total, percent: percent(current, total) }
+}
+
+function diskInfo() {
+  const item = nestedValue(statusData.value, ['dsk', 'disk'])
+  const current = numberValue(item, ['current', 'used', 'usage'])
+  const total = numberValue(item, ['total', 'max'])
+  return { current, total, percent: percent(current, total) }
+}
+
+function networkInfo() {
+  const item = nestedValue(statusData.value, ['net', 'network'])
+  return {
+    down: numberValue(item, ['recv', 'receive', 'down', 'download']),
+    up: numberValue(item, ['sent', 'psent', 'send', 'up', 'upload']),
+  }
+}
+
+function ioInfo() {
+  const item = nestedValue(statusData.value, ['dio', 'disk_io', 'io'])
+  return { read: numberValue(item, ['read']), write: numberValue(item, ['write']) }
+}
+
+function clientTraffic(row) {
+  const up = numberValue(row, ['up', 'upload'])
+  const down = numberValue(row, ['down', 'download'])
+  return formatBytes(up + down)
+}
+
+function clientLimit(row) {
+  const value = numberValue(row, ['volume', 'total', 'limit'])
+  return value > 0 ? formatBytes(value) : '不限'
+}
+
+function expiryText(row) {
+  const value = row?.expiry ?? row?.expire_at ?? row?.expiry_time
+  if (!value) return '永不过期'
+  const number = Number(value)
+  if (Number.isFinite(number)) return formatTime(number > 1e12 ? number : number * 1000)
+  return formatTime(value)
+}
+
+function listText(value) {
+  if (!Array.isArray(value) || !value.length) return '-'
+  return value.map((item) => typeof item === 'object' ? (item.name || item.tag || item.id || JSON.stringify(item)) : item).join('、')
+}
+
+function maskSensitive(value) {
+  if (Array.isArray(value)) return value.map(maskSensitive)
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, /password|passwd|token|secret|private.?key/i.test(key) ? '******' : maskSensitive(item)]))
+}
+
+function maskedJson(value) {
+  return value == null ? '暂无数据' : JSON.stringify(maskSensitive(value), null, 2)
+}
 
 const groups = computed(() => [...new Set(nodes.value.map((item) => item.group_name).filter(Boolean))])
 
@@ -117,11 +254,67 @@ async function runRawSave() {
 
 async function showDetails(node) {
   detailOpen.value = true
-  detailLoading.value = true
-  detail.value = null
-  try { detail.value = (await api.get(`/nodes/${node.id}/details`)).data }
-  catch (error) { ElMessage.error(errorText(error)) }
-  finally { detailLoading.value = false }
+  detailNode.value = node
+  detailTab.value = 'overview'
+  rawSource.value = 'overview'
+  detailSections.value = sectionState()
+  await loadDetailSection('overview')
+}
+
+async function loadDetailSection(key, force = false) {
+  const section = detailSections.value[key]
+  const config = sectionConfig[key]
+  if (!section || !config || !detailNode.value || section.loading || (section.loaded && !force)) return
+  section.loading = true
+  section.error = ''
+  try {
+    section.data = (await api.get(`/nodes/${detailNode.value.id}/${config.endpoint}`)).data
+    section.loaded = true
+  } catch (error) {
+    section.error = errorText(error)
+  } finally {
+    section.loading = false
+  }
+}
+
+function changeDetailTab(name) {
+  detailTab.value = name
+  if (sectionConfig[name]) loadDetailSection(name)
+  if (name === 'raw') loadDetailSection(rawSource.value)
+}
+
+function changeRawSource(name) {
+  rawSource.value = name
+  loadDetailSection(name)
+}
+
+async function refreshDetail() {
+  const key = detailTab.value === 'raw' ? rawSource.value : detailTab.value
+  await loadDetailSection(key, true)
+  if (!detailSections.value[key].error) ElMessage.success(`${sectionConfig[key].label}已刷新`)
+}
+
+async function restartDetailNode() {
+  const node = detailNode.value
+  if (!node) return
+  try {
+    await ElMessageBox.confirm(`将在“${node.name}”上重启 sing-box Core，确认继续？`, '节点操作', { type: 'warning' })
+    const response = (await api.post('/actions/restart-core', { node_ids: [node.id] })).data
+    const result = response.results?.[0]
+    result?.ok ? ElMessage.success('Core 重启成功') : ElMessage.error(result?.error || 'Core 重启失败')
+    await loadDetailSection('overview', true)
+  } catch (error) {
+    if (error !== 'cancel') ElMessage.error(errorText(error))
+  }
+}
+
+async function copyRaw() {
+  try {
+    await navigator.clipboard.writeText(rawJson.value)
+    ElMessage.success('已复制原始数据')
+  } catch {
+    ElMessage.error('复制失败，请检查浏览器剪贴板权限')
+  }
 }
 
 async function showSnapshots(node) {
@@ -153,7 +346,11 @@ function escapeHtml(value) {
   return value.replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char])
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  window.addEventListener('resize', syncDrawerSize)
+})
+onBeforeUnmount(() => window.removeEventListener('resize', syncDrawerSize))
 </script>
 
 <template>
@@ -188,9 +385,125 @@ onMounted(load)
     <template #footer><el-button @click="editOpen = false">取消</el-button><el-button type="primary" @click="saveNode">保存</el-button></template>
   </el-dialog>
 
-  <el-drawer v-model="detailOpen" title="节点实时详情" size="70%">
-    <div v-loading="detailLoading">
-      <div v-if="detail" class="detail-grid"><div v-for="key in ['status','clients','inbounds','onlines']" :key="key"><h4>{{ key }}</h4><pre class="json-box">{{ JSON.stringify(detail[key], null, 2) }}</pre></div></div>
+  <el-drawer v-model="detailOpen" :size="detailDrawerSize" class="node-detail-drawer" :with-header="false">
+    <div v-if="detailNode" class="node-detail">
+      <header class="node-detail-head">
+        <div class="node-detail-title">
+          <div class="node-detail-name-line">
+            <h3>{{ detailNode.name }}</h3>
+            <span class="node-status" :class="{ online: detailNode.online }"><i></i>{{ detailNode.online ? '在线' : '离线' }}</span>
+          </div>
+          <div class="node-detail-meta">
+            <span>{{ detailNode.group_name || '未分组' }}<template v-if="detailNode.region"> · {{ detailNode.region }}</template></span>
+            <span>{{ detailNode.last_latency_ms == null ? '延迟未知' : `${detailNode.last_latency_ms} ms` }}</span>
+            <span>版本 {{ detailNode.sui_version || '未知' }}</span>
+            <span class="node-detail-url">{{ detailNode.base_url }}</span>
+          </div>
+        </div>
+        <div class="node-detail-actions">
+          <el-button @click="refreshDetail">刷新当前页</el-button>
+          <el-button type="warning" plain @click="restartDetailNode">重启 Core</el-button>
+          <el-button circle aria-label="关闭" @click="detailOpen = false">×</el-button>
+        </div>
+      </header>
+
+      <el-tabs v-model="detailTab" class="node-detail-tabs" @tab-change="changeDetailTab">
+        <el-tab-pane label="运行概览" name="overview">
+          <div v-loading="detailSections.overview.loading" class="detail-section">
+            <el-alert v-if="detailSections.overview.error" :title="detailSections.overview.error" type="error" show-icon :closable="false">
+              <template #default><el-button size="small" @click="loadDetailSection('overview', true)">重试</el-button></template>
+            </el-alert>
+            <template v-else-if="detailSections.overview.loaded">
+              <div class="resource-grid">
+                <div class="resource-card">
+                  <div class="resource-card-head"><span>CPU 使用率</span><b>{{ cpuPercent() }}%</b></div>
+                  <el-progress :percentage="cpuPercent()" :stroke-width="9" :show-text="false" />
+                </div>
+                <div class="resource-card">
+                  <div class="resource-card-head"><span>内存</span><b>{{ memoryInfo().percent }}%</b></div>
+                  <el-progress :percentage="memoryInfo().percent" :stroke-width="9" :show-text="false" />
+                  <small>{{ formatBytes(memoryInfo().current) }} / {{ formatBytes(memoryInfo().total) }}</small>
+                </div>
+                <div class="resource-card">
+                  <div class="resource-card-head"><span>磁盘</span><b>{{ diskInfo().percent }}%</b></div>
+                  <el-progress :percentage="diskInfo().percent" :stroke-width="9" :show-text="false" />
+                  <small>{{ formatBytes(diskInfo().current) }} / {{ formatBytes(diskInfo().total) }}</small>
+                </div>
+                <div class="resource-card resource-card-accent">
+                  <span>网络流量</span>
+                  <div class="traffic-pair"><b>↓ {{ formatBytes(networkInfo().down) }}</b><b>↑ {{ formatBytes(networkInfo().up) }}</b></div>
+                  <small>实时累计接收 / 发送</small>
+                </div>
+              </div>
+              <div class="detail-summary-grid">
+                <div class="detail-item"><label>磁盘读取</label><strong>{{ formatBytes(ioInfo().read) }}</strong></div>
+                <div class="detail-item"><label>磁盘写入</label><strong>{{ formatBytes(ioInfo().write) }}</strong></div>
+                <div class="detail-item"><label>最后健康检查</label><strong>{{ formatTime(detailNode.last_checked_at) }}</strong></div>
+                <div class="detail-item"><label>最近成功连接</label><strong>{{ formatTime(detailNode.last_ok_at) }}</strong></div>
+              </div>
+            </template>
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane :label="`客户端 ${detailSections.clients.loaded ? clientRows.length : ''}`" name="clients">
+          <div v-loading="detailSections.clients.loading" class="detail-section">
+            <el-alert v-if="detailSections.clients.error" :title="detailSections.clients.error" type="error" show-icon :closable="false"><template #default><el-button size="small" @click="loadDetailSection('clients', true)">重试</el-button></template></el-alert>
+            <template v-else-if="detailSections.clients.loaded">
+              <el-empty v-if="!clientRows.length" description="暂无客户端" />
+              <div v-else class="responsive-data-list">
+                <article v-for="row in clientRows" :key="row.id ?? row.name" class="data-card">
+                  <div class="data-card-head"><div><b>{{ row.name || `客户端 #${row.id}` }}</b><small>#{{ row.id ?? '-' }}</small></div><el-tag :type="row.enable === false ? 'info' : 'success'" size="small">{{ row.enable === false ? '停用' : '启用' }}</el-tag></div>
+                  <dl><div><dt>绑定入站</dt><dd>{{ listText(row.inbounds) }}</dd></div><div><dt>已用流量</dt><dd>{{ clientTraffic(row) }}</dd></div><div><dt>流量上限</dt><dd>{{ clientLimit(row) }}</dd></div><div><dt>到期时间</dt><dd>{{ expiryText(row) }}</dd></div></dl>
+                </article>
+              </div>
+            </template>
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane :label="`入站 ${detailSections.inbounds.loaded ? inboundRows.length : ''}`" name="inbounds">
+          <div v-loading="detailSections.inbounds.loading" class="detail-section">
+            <el-alert v-if="detailSections.inbounds.error" :title="detailSections.inbounds.error" type="error" show-icon :closable="false"><template #default><el-button size="small" @click="loadDetailSection('inbounds', true)">重试</el-button></template></el-alert>
+            <template v-else-if="detailSections.inbounds.loaded">
+              <el-empty v-if="!inboundRows.length" description="暂无入站" />
+              <div v-else class="responsive-data-list">
+                <article v-for="row in inboundRows" :key="row.id ?? row.tag" class="data-card">
+                  <div class="data-card-head"><div><b>{{ row.tag || `入站 #${row.id}` }}</b><small>#{{ row.id ?? '-' }}</small></div><el-tag size="small" effect="plain">{{ row.type || row.protocol || '未知协议' }}</el-tag></div>
+                  <dl><div><dt>监听地址</dt><dd>{{ row.listen || '::' }}</dd></div><div><dt>端口</dt><dd>{{ row.listen_port ?? row.port ?? '-' }}</dd></div><div><dt>TLS</dt><dd>{{ (row.tls_id || row.tls?.enabled) ? '已启用' : '未启用' }}</dd></div><div><dt>客户端数</dt><dd>{{ Array.isArray(row.users) ? row.users.length : 0 }}</dd></div></dl>
+                </article>
+              </div>
+            </template>
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane label="在线情况" name="onlines">
+          <div v-loading="detailSections.onlines.loading" class="detail-section">
+            <el-alert v-if="detailSections.onlines.error" :title="detailSections.onlines.error" type="error" show-icon :closable="false"><template #default><el-button size="small" @click="loadDetailSection('onlines', true)">重试</el-button></template></el-alert>
+            <template v-else-if="detailSections.onlines.loaded">
+              <div class="online-grid">
+                <section v-for="groupItem in onlineGroups" :key="groupItem.key" class="online-card">
+                  <div class="online-card-title"><b>{{ groupItem.title }}</b><span>{{ groupItem.values.length }}</span></div>
+                  <div v-if="groupItem.values.length" class="online-tags"><el-tag v-for="(item, index) in groupItem.values" :key="index" effect="plain">{{ typeof item === 'object' ? (item.name || item.tag || item.id || JSON.stringify(item)) : item }}</el-tag></div>
+                  <el-empty v-else :image-size="48" description="暂无数据" />
+                </section>
+              </div>
+            </template>
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane label="原始数据" name="raw">
+          <div class="raw-toolbar">
+            <el-select v-model="rawSource" size="small" aria-label="原始数据类型" @change="changeRawSource">
+              <el-option v-for="(item, key) in sectionConfig" :key="key" :label="item.label" :value="key" />
+            </el-select>
+            <span class="muted">敏感字段已自动隐藏</span>
+            <el-button size="small" @click="copyRaw">复制 JSON</el-button>
+          </div>
+          <div v-loading="detailSections[rawSource].loading">
+            <el-alert v-if="detailSections[rawSource].error" :title="detailSections[rawSource].error" type="error" show-icon :closable="false" />
+            <pre v-else class="json-box detail-json">{{ rawJson }}</pre>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
     </div>
   </el-drawer>
 
