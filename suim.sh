@@ -316,6 +316,13 @@ install_management_command() {
 }
 
 apply_file_permissions() {
+  # Nginx must be able to traverse the project root and read the compiled UI.
+  chmod 0755 "$APP_DIR" "$APP_DIR/frontend"
+  # The API runs as sui-manager. Git updates can create source files with a
+  # restrictive root umask, so normalize the backend ownership and modes.
+  chown -R root:"$SERVICE_GROUP" "$APP_DIR/backend"
+  find "$APP_DIR/backend" -type d -exec chmod 0750 {} +
+  find "$APP_DIR/backend" -type f -exec chmod 0640 {} +
   install -d -o "$SERVICE_USER" -g "$SERVICE_GROUP" -m 0750 "$APP_DIR/data"
   chown -R "$SERVICE_USER":"$SERVICE_GROUP" "$APP_DIR/data"
   find "$APP_DIR/frontend/dist" -type d -exec chmod 0755 {} +
