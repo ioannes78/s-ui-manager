@@ -1,8 +1,6 @@
-# S-UI Manager V2.0（本地开发版）
+# S-UI Manager V2.0
 
 一个轻量的多节点 S-UI 中央控制台。目标是保留每台 VPS 上现有的 S-UI，仅通过官方 `/apiv2` Token API 做集中管理。
-
-> 当前 V2.0 源码仅保存在本地开发目录，尚未提交或发布到 GitHub。GitHub `main` 分支仍为 V1.1.0。
 
 ## V2.0 已实现功能
 
